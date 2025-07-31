@@ -1,0 +1,116 @@
+from typing import Callable
+from autogen import coding, ConversableAgent, register_function
+from autogen.mcp.mcp_client import Toolkit
+
+from granite_rag_agent.config import Settings
+from granite_rag_agent.llm import LLMConfig
+from granite_rag_agent.prompts import ASSISTANT_PROMPT, GOAL_JUDGE_PROMPT, PLANNER_MESSAGE, REFLECTION_ASSISTANT_PROMPT
+
+class Agents:
+
+    def __init__(self, config: Settings = None, assistant_tools: dict[str, Callable] = None, mcp_toolkit: Toolkit = None):
+        
+        if not config:
+            config = Settings()
+
+        print("******************")
+        print(config)
+
+        llm_config = LLMConfig(config)
+
+        # Generic LLM completion, used for servicing Open WebUI originated requests
+        self.generic_assistant = ConversableAgent(
+            name="Generic_Assistant",
+            llm_config=llm_config.ollama_llm_config,
+            human_input_mode="NEVER",
+        )
+
+        # Vision Assistant
+        self.vision_assistant = ConversableAgent(
+            name="Vision_Assistant",
+            llm_config=llm_config.vision_llm_config,
+            human_input_mode="NEVER",
+        )
+
+        # Provides the initial high level plan
+        self.planner = ConversableAgent(
+            name="Planner",
+            system_message=PLANNER_MESSAGE,
+            llm_config=llm_config.planner_llm_config,
+            human_input_mode="NEVER",
+        )
+
+        # The assistant agent is responsible for executing each step of the plan, including calling tools
+        self.assistant = ConversableAgent(
+            name="Research_Assistant",
+            system_message=ASSISTANT_PROMPT,
+            llm_config=llm_config.ollama_llm_config,
+            human_input_mode="NEVER",
+            is_termination_msg=lambda msg: "tool_response" not in msg
+            and msg["content"] == "",
+        )
+
+        # Determines whether the ultimate objective has been met
+        self.goal_judge = ConversableAgent(
+            name="GoalJudge",
+            system_message=GOAL_JUDGE_PROMPT,
+            llm_config=llm_config.ollama_llm_config,
+            human_input_mode="NEVER",
+        )
+
+        # Step Critic
+        self.step_critic = ConversableAgent(
+            name="Step_Critic",
+            llm_config=llm_config.ollama_llm_config,
+            human_input_mode="NEVER",
+        )
+
+        # Reflection Assistant: Reflect on plan progress and give the next step
+        self.reflection_assistant = ConversableAgent(
+            name="ReflectionAssistant",
+            system_message=REFLECTION_ASSISTANT_PROMPT,
+            llm_config=llm_config.ollama_llm_config,
+            human_input_mode="NEVER",
+        )
+
+        # Report Generator
+        self.report_generator = ConversableAgent(
+            name="Report_Generator",
+            llm_config=llm_config.ollama_llm_config,
+            human_input_mode="NEVER",
+        )
+
+        # User Proxy chats with assistant on behalf of user and executes tools
+        code_exec = coding.LocalCommandLineCodeExecutor(
+            timeout=10,
+            work_dir="code_exec",
+        )
+        self.user_proxy = ConversableAgent(
+            name="User",
+            human_input_mode="NEVER",
+            code_execution_config={"executor": code_exec},
+            is_termination_msg=lambda msg: msg and "content" in msg and msg["content"] is not None and ("##ANSWER##" in msg["content"]
+            or "## Answser" in msg["content"]
+            or "##TERMINATE##" in msg["content"]
+            or ("tool_calls" not in msg and msg["content"] == "")),
+        )
+
+        if assistant_tools:
+            for description, tool in assistant_tools.items():
+                print(f"Registering tool {description}")
+                register_function(
+                    tool,
+                    caller=self.assistant,
+                    executor=self.user_proxy,
+                    name=description,
+                    description=description,
+                )
+
+        if mcp_toolkit is not None:
+            print("Registering MCP tool")
+            print(mcp_toolkit)
+            mcp_toolkit.register_for_execution(self.user_proxy)
+            mcp_toolkit.register_for_llm(self.assistant)
+        else:
+            print("NO MCP")
+        
