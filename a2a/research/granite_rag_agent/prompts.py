@@ -3,9 +3,7 @@
 ####################
 PLANNER_MESSAGE = """You are a task planner. You will be given some information your job is to think step by step and enumerate the steps to complete a given task, using the provided context to guide you.
     You will not execute the steps yourself, but provide the steps to a helper who will execute them. Make sure each step consists of a single operation, not a series of operations. The helper has the following capabilities:
-    1. Search through a collection of documents provided by the user. These are the user's own documents and will likely not have latest news or other information you can find on the internet.
-    2. Synthesize, summarize and classify the information received.
-    3. Search the internet
+    {tool_descriptions}
     The plan may have as little or as many steps as is necessary to accomplish the given task.
 
     You may use any of the capabilties that the helper has, but you do not need to use all of them if they are not required to complete the task.

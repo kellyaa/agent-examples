@@ -44,14 +44,6 @@ class Agents:
             human_input_mode="NEVER",
         )
 
-        # Provides the initial high level plan
-        self.planner = ConversableAgent(
-            name="Planner",
-            system_message=PLANNER_MESSAGE,
-            llm_config=llm_config.planner_llm_config,
-            human_input_mode="NEVER",
-        )
-
         # The assistant agent is responsible for executing each step of the plan, including calling tools
         self.assistant = ConversableAgent(
             name="Research_Assistant",
@@ -112,9 +104,11 @@ class Agents:
             ),
         )
 
+        tool_descriptions = ""
+
         if assistant_tools:
             for description, tool in assistant_tools.items():
-                print(f"Registering tool {description}")
+                logging.info("Registering tool %s", description)
                 register_function(
                     tool,
                     caller=self.assistant,
@@ -122,11 +116,22 @@ class Agents:
                     name=description,
                     description=description,
                 )
+                tool_descriptions += description + "\n\n"
 
         if mcp_toolkit is not None:
             logging.info("Registering MCP tool")
             logging.debug(mcp_toolkit)
             mcp_toolkit.register_for_execution(self.user_proxy)
             mcp_toolkit.register_for_llm(self.assistant)
+            tool_descriptions += [tool.description for tool in mcp_toolkit.tools]
         else:
             logging.debug("No MCP tools to register")
+
+        # Provides the initial high level plan
+        self.planner = ConversableAgent(
+            name="Planner",
+            system_message=PLANNER_MESSAGE.format(tool_descriptions=tool_descriptions),
+            llm_config=llm_config.planner_llm_config,
+            human_input_mode="NEVER",
+        )
+

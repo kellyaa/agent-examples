@@ -1,10 +1,10 @@
 import json
 import logging
 import os
-from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 from pydantic import model_validator
-from pydantic import Field, BaseModel
+from pydantic import Field
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +22,7 @@ class Settings(BaseSettings):
         os.getenv("OPENAI_API_URL", "http://localhost:11434/v1"),
         description="The URL for OpenAI API",
     )
-    OPENAI_API_KEY: str = Field(
-        os.getenv("OPENAI_API_KEY", "ollama"), description="The key for OpenAI API"
-    )
+    OPENAI_API_KEY: str = Field(os.getenv("OPENAI_API_KEY", "ollama"), description="The key for OpenAI API")
     VISION_API_URL: str = Field(
         os.getenv("VISION_API_URL", "http://localhost:11434/v1"),
         description="The URL for Vision API",
@@ -40,12 +38,13 @@ class Settings(BaseSettings):
         description="The maximum number of plan steps",
         ge=1,
     )
-    TAVILY_API_KEY: str = Field(
-        os.getenv("TAVILY_API_KEY", ""), description="The key for Tavily API"
-    )
-    MCP_ENDPOINT: str = Field(
-        os.getenv("MCP_ENDPOINT", ""), description="Endpoint for an option MCP server"
-    )
+    TAVILY_API_KEY: str = Field(os.getenv("TAVILY_API_KEY", ""), description="The key for Tavily API")
+    MCP_ENDPOINT: str = Field(os.getenv("MCP_ENDPOINT", ""), description="Endpoint for an option MCP server")
+    MCP_TRANSPORT: Literal["sse", "streamable_http"] = Field(
+        os.getenv(
+            "MCP_TRANSPORT",
+            "streamable_http"),
+            description="The transport method of your MCP server. sse or streamable_http")
 
     class Config:
         env_file = ".env"
@@ -63,7 +62,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def set_secondary_env(self) -> "Settings":
-
         if "TAVILY_API_KEY" not in os.environ:
             os.environ["TAVILY_API_KEY"] = str(self.TAVILY_API_KEY)
 

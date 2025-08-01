@@ -3,11 +3,13 @@ Module for A2A Agent.
 """
 
 import logging
+from typing import Callable
 
 import uvicorn
-from autogen.mcp.mcp_client import create_toolkit
+from autogen.mcp.mcp_client import create_toolkit, Toolkit
 from mcp import ClientSession
 from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamablehttp_client
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.apps import A2AStarletteApplication
@@ -17,7 +19,7 @@ from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TaskState
 from a2a.utils import new_agent_text_message, new_task
 
-from granite_rag_agent.config import settings
+from granite_rag_agent.config import settings, Settings
 from granite_rag_agent.event import Event
 from granite_rag_agent.main import RagAgent
 from granite_rag_agent.tools.tavily_search import search
@@ -100,6 +102,21 @@ class ResearchExecutor(AgentExecutor):
     """
     A class to handle research execution for A2A Agent.
     """
+    async def _run_agent(self,
+        messages: dict,
+        settings: Settings,
+        event_emitter: Event,
+        assistant_tool_map: dict[str, Callable],
+        toolkit: Toolkit):
+
+        rag_agent = RagAgent(
+            config=settings,
+            eventer=event_emitter,
+            assistant_tools=assistant_tool_map,
+            mcp_toolkit=toolkit,
+        )
+        result = await rag_agent.run_workflow(messages)
+        await event_emitter.emit_event(result, True)
 
     async def execute(self, context: RequestContext, event_queue: EventQueue):
         """
@@ -133,30 +150,39 @@ class ResearchExecutor(AgentExecutor):
         try:
             toolkit = None
             if settings.MCP_ENDPOINT:
-                async with sse_client(
-                    url=settings.MCP_ENDPOINT
-                ) as streams, ClientSession(*streams) as session:
-                    await session.initialize()
-                    toolkit = await create_toolkit(
-                        session=session, use_mcp_resources=False
-                    )
-                    rag_agent = RagAgent(
-                        config=settings,
-                        eventer=event_emitter,
-                        assistant_tools=assistant_tool_map,
-                        mcp_toolkit=toolkit,
-                    )
-                    result = await rag_agent.run_workflow(messages)
-                    await event_emitter.emit_event(result, True)
+                if settings.MCP_TRANSPORT == "sse":
+                    async with sse_client(
+                        url=settings.MCP_ENDPOINT
+                    ) as streams, ClientSession(*streams) as session:
+                        await session.initialize()
+                        toolkit = await create_toolkit(
+                            session=session, use_mcp_resources=False
+                        )
+                        await self._run_agent(messages, settings,
+                            event_emitter,
+                            assistant_tool_map,
+                            toolkit,)
+                else:
+                    async with streamablehttp_client(
+                        url=settings.MCP_ENDPOINT
+                    )  as (
+                        read_stream,
+                        write_stream,
+                        _,
+                    ), ClientSession(read_stream, write_stream) as session:
+                        await session.initialize()
+                        toolkit = await create_toolkit(
+                            session=session, use_mcp_resources=False
+                        )
+                        await self._run_agent(messages, settings,
+                            event_emitter,
+                            assistant_tool_map,
+                            toolkit,)
             else:
-                rag_agent = RagAgent(
-                    config=settings,
-                    eventer=event_emitter,
-                    assistant_tools=assistant_tool_map,
-                    mcp_toolkit=toolkit,
-                )
-                result = await rag_agent.run_workflow(messages)
-                await event_emitter.emit_event(result, True)
+                await self._run_agent(messages, settings,
+                    event_emitter,
+                    assistant_tool_map,
+                    toolkit,)
 
         except Exception as e:
             logger.error(repr(e))
