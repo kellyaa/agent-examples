@@ -212,7 +212,6 @@ source = { editable = "." }
 dependencies = [
     { name = "a2a-sdk" },
     { name = "ag2", extra = ["mcp", "openai"] },
-    { name = "httpx" },
     { name = "python-dotenv" },
     { name = "tavily-python" },
 ]
@@ -221,7 +220,6 @@ dependencies = [
 requires-dist = [
     { name = "a2a-sdk", specifier = ">=0.2.16" },
     { name = "ag2", extras = ["openai", "mcp"], specifier = ">=0.9.6" },
-    { name = "httpx" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "tavily-python", specifier = ">=0.7.7" },
 ]

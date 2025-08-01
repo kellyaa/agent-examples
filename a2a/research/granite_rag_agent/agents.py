@@ -1,20 +1,32 @@
+import logging
+
 from typing import Callable
 from autogen import coding, ConversableAgent, register_function
 from autogen.mcp.mcp_client import Toolkit
 
 from granite_rag_agent.config import Settings
 from granite_rag_agent.llm import LLMConfig
-from granite_rag_agent.prompts import ASSISTANT_PROMPT, GOAL_JUDGE_PROMPT, PLANNER_MESSAGE, REFLECTION_ASSISTANT_PROMPT
+from granite_rag_agent.prompts import (
+    ASSISTANT_PROMPT,
+    GOAL_JUDGE_PROMPT,
+    PLANNER_MESSAGE,
+    REFLECTION_ASSISTANT_PROMPT,
+)
+
+logger = logging.getLogger(__name__)
+
 
 class Agents:
 
-    def __init__(self, config: Settings = None, assistant_tools: dict[str, Callable] = None, mcp_toolkit: Toolkit = None):
-        
+    def __init__(
+        self,
+        config: Settings = None,
+        assistant_tools: dict[str, Callable] = None,
+        mcp_toolkit: Toolkit = None,
+    ):
+
         if not config:
             config = Settings()
-
-        print("******************")
-        print(config)
 
         llm_config = LLMConfig(config)
 
@@ -89,10 +101,15 @@ class Agents:
             name="User",
             human_input_mode="NEVER",
             code_execution_config={"executor": code_exec},
-            is_termination_msg=lambda msg: msg and "content" in msg and msg["content"] is not None and ("##ANSWER##" in msg["content"]
-            or "## Answser" in msg["content"]
-            or "##TERMINATE##" in msg["content"]
-            or ("tool_calls" not in msg and msg["content"] == "")),
+            is_termination_msg=lambda msg: msg
+            and "content" in msg
+            and msg["content"] is not None
+            and (
+                "##ANSWER##" in msg["content"]
+                or "## Answser" in msg["content"]
+                or "##TERMINATE##" in msg["content"]
+                or ("tool_calls" not in msg and msg["content"] == "")
+            ),
         )
 
         if assistant_tools:
@@ -107,10 +124,9 @@ class Agents:
                 )
 
         if mcp_toolkit is not None:
-            print("Registering MCP tool")
-            print(mcp_toolkit)
+            logging.info("Registering MCP tool")
+            logging.debug(mcp_toolkit)
             mcp_toolkit.register_for_execution(self.user_proxy)
             mcp_toolkit.register_for_llm(self.assistant)
         else:
-            print("NO MCP")
-        
+            logging.debug("No MCP tools to register")

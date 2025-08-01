@@ -10,8 +10,12 @@ from granite_rag_agent.agents import Agents
 from granite_rag_agent.config import Settings
 from granite_rag_agent.prompts import STEP_CRITIC_PROMPT
 
+logger = logging.getLogger(__name__)
+
+
 class PlanExecutionError(Exception):
     pass
+
 
 @dataclass
 class PlanContext:
@@ -24,24 +28,43 @@ class PlanContext:
     last_step: str = ""
     last_output: Any = ""
 
+
 class RagAgent:
 
-    def __init__(self, config: Settings, eventer: Event, assistant_tools: dict[str, Callable], mcp_toolkit: Toolkit, logger=None):
+    def __init__(
+        self,
+        config: Settings,
+        eventer: Event,
+        assistant_tools: dict[str, Callable],
+        mcp_toolkit: Toolkit,
+        logger=None,
+    ):
         self.eventer = eventer
         self.config = config
-        self.agents = Agents(self.config, assistant_tools=assistant_tools, mcp_toolkit=mcp_toolkit)
+        self.agents = Agents(
+            self.config, assistant_tools=assistant_tools, mcp_toolkit=mcp_toolkit
+        )
         self.logger = logger or logging.getLogger(__name__)
         self.context = PlanContext()
 
     async def run_workflow(self, body: list[dict]):
+        # Parse instructions from user
         self.context.latest_content, image_info = self._extract_user_input(body)
-        self.context.image_descriptions = await self._describe_images(self.context.latest_content, image_info)
-        plan_instruction = self._combine_input_and_descriptions(self.context.latest_content, self.context.image_descriptions)
+        self.context.image_descriptions = await self._describe_images(
+            self.context.latest_content, image_info
+        )
+        plan_instruction = self._combine_input_and_descriptions(
+            self.context.latest_content, self.context.image_descriptions
+        )
+
+        # Create an initial plan with the instructions
         self.context.plan_dict = await self._generate_plan(plan_instruction)
 
+        # Plan should be a list. If not, return back to user
         if isinstance(self.context.plan_dict, str):
             return self.context.plan_dict
 
+        # Execute plan
         final_answer = await self._execute_plan()
         return final_answer
 
@@ -66,14 +89,21 @@ class RagAgent:
     async def _describe_images(self, latest_content, image_info):
         async def describe(image):
             await self.eventer.emit_event(message="Analyzing Image...")
-            messages = [{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": f"Please describe the following image... {latest_content}"},
-                    image,
-                ]
-            }]
-            desc = await self.agents.vision_assistant.a_generate_reply(messages=messages)
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Please describe the following image... {latest_content}",
+                        },
+                        image,
+                    ],
+                }
+            ]
+            desc = await self.agents.vision_assistant.a_generate_reply(
+                messages=messages
+            )
             return f"Accompanying image description: {desc['content']}"
 
         return await asyncio.gather(*(describe(img) for img in image_info))
@@ -119,7 +149,7 @@ class RagAgent:
                 last_step=self.context.last_step,
                 context=self.context.answer_output,
                 last_output=self.context.last_output,
-            )
+            ),
         )
         was_job_accomplished = output.chat_history[-1]["content"]
         reflection_message = self.context.last_step
@@ -142,7 +172,7 @@ class RagAgent:
         output = await self.agents.user_proxy.a_initiate_chat(
             recipient=self.agents.goal_judge,
             max_turns=1,
-            message=f"(```{str(goal_message)}```"
+            message=f"(```{str(goal_message)}```",
         )
 
         if "##NOT YET##" not in output.chat_history[-1]["content"]:
@@ -161,18 +191,25 @@ class RagAgent:
         output = await self.agents.user_proxy.a_initiate_chat(
             recipient=self.agents.reflection_assistant,
             max_turns=1,
-            message=f"(```{str(message)}```"
+            message=f"(```{str(message)}```",
         )
         return output.chat_history[-1]["content"]
 
     async def _execute_instruction(self, instruction):
         await self.eventer.emit_event(message="Executing step: " + instruction)
-        prompt = instruction + (f"\n Contextual Information: \n{self.context.answer_output}" if self.context.answer_output else "")
+        prompt = instruction + (
+            f"\n Contextual Information: \n{self.context.answer_output}"
+            if self.context.answer_output
+            else ""
+        )
         output = await self.agents.user_proxy.a_initiate_chat(
             recipient=self.agents.assistant, max_turns=3, message=prompt
         )
-        return [item["content"] for item in output.chat_history
-                if item.get("name") == "Research_Assistant" and item["content"]]
+        return [
+            item["content"]
+            for item in output.chat_history
+            if item.get("name") == "Research_Assistant" and item["content"]
+        ]
 
     async def _summarize_results(self):
         await self.eventer.emit_event(message="Summing up findings...")
