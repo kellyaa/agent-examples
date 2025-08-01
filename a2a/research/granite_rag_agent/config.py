@@ -45,6 +45,8 @@ class Settings(BaseSettings):
             "MCP_TRANSPORT",
             "streamable_http"),
             description="The transport method of your MCP server. sse or streamable_http")
+    KEYCLOAK_URL: str = Field(os.getenv("KEYCLOAK_URL", "http://keycloak.localtest.me:8080"),
+                              descripiton="URL of keycloak server")
 
     class Config:
         env_file = ".env"

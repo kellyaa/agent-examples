@@ -2,12 +2,13 @@
 name = "granite-rag-agent"
 version = "0.1.0"
 requires-python = ">=3.11,<3.13"
-description = "Granite Retrieval Agent and Image Research Agent modules"
+description = "Granite Retrieval Agent module"
 dependencies = [
     "ag2[openai,mcp]>=0.9.6",
     "tavily-python>=0.7.7",
     "python-dotenv>=1.1.0",
     "a2a-sdk>=0.2.16",
+    "python-keycloak>=5.5.1",
 ]
 
 [tool.ruff]

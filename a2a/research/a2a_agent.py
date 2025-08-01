@@ -21,6 +21,7 @@ from a2a.utils import new_agent_text_message, new_task
 
 from granite_rag_agent.config import settings, Settings
 from granite_rag_agent.event import Event
+from granite_rag_agent.keycloak import get_token
 from granite_rag_agent.main import RagAgent
 from granite_rag_agent.tools.tavily_search import search
 
@@ -150,6 +151,14 @@ class ResearchExecutor(AgentExecutor):
         try:
             toolkit = None
             if settings.MCP_ENDPOINT:
+                # Need to auth with keycloak for our PoC in order to use remote MCP
+                if settings.KEYCLOAK_URL:
+                        try:
+                            token = get_token()
+                            logger.info(f'received token: {token}')
+                        except Exception as e:
+                            logger.error("Unable to retrieve keycloak token: %s", e)
+                            
                 if settings.MCP_TRANSPORT == "sse":
                     async with sse_client(
                         url=settings.MCP_ENDPOINT
