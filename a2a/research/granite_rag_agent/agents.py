@@ -125,7 +125,9 @@ class Agents:
             logging.info(mcp_toolkit)
             mcp_toolkit.register_for_execution(self.user_proxy)
             mcp_toolkit.register_for_llm(self.assistant)
-            tool_descriptions += [tool.description for tool in mcp_toolkit.tools]
+            tool_descriptions = ""
+            for tool in mcp_toolkit.tools:
+                tool_descriptions += str(tool.description)
         else:
             logging.info("No MCP tools to register")
 
