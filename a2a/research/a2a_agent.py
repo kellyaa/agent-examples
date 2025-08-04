@@ -3,6 +3,7 @@ Module for A2A Agent.
 """
 
 import logging
+import sys
 from typing import Callable
 
 import uvicorn
