@@ -4,6 +4,7 @@ import os
 from keycloak import KeycloakOpenID
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(levelname)s: %(message)s')
 
 #########
 # A very hacky POC integration with Keycloak

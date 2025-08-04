@@ -26,8 +26,7 @@ from granite_rag_agent.main import RagAgent
 from granite_rag_agent.tools.tavily_search import search
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(levelname)s: %(message)s')
 
 
 def get_agent_card(host: str, port: int):
@@ -158,7 +157,7 @@ class ResearchExecutor(AgentExecutor):
                             logger.info(f'received token: {token}')
                         except Exception as e:
                             logger.error("Unable to retrieve keycloak token: %s", e)
-                            
+
                 if settings.MCP_TRANSPORT == "sse":
                     async with sse_client(
                         url=settings.MCP_ENDPOINT

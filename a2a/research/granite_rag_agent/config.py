@@ -7,6 +7,7 @@ from pydantic import Field
 from typing import Literal
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(levelname)s: %(message)s')
 
 
 class Settings(BaseSettings):

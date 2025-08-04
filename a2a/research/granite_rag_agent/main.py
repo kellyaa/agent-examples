@@ -11,7 +11,7 @@ from granite_rag_agent.config import Settings
 from granite_rag_agent.prompts import STEP_CRITIC_PROMPT
 
 logger = logging.getLogger(__name__)
-
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(levelname)s: %(message)s')
 
 class PlanExecutionError(Exception):
     pass

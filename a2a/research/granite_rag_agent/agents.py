@@ -14,6 +14,7 @@ from granite_rag_agent.prompts import (
 )
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(levelname)s: %(message)s')
 
 
 class Agents:
@@ -120,12 +121,12 @@ class Agents:
 
         if mcp_toolkit is not None:
             logging.info("Registering MCP tool")
-            logging.debug(mcp_toolkit)
+            logging.info(mcp_toolkit)
             mcp_toolkit.register_for_execution(self.user_proxy)
             mcp_toolkit.register_for_llm(self.assistant)
             tool_descriptions += [tool.description for tool in mcp_toolkit.tools]
         else:
-            logging.debug("No MCP tools to register")
+            logging.info("No MCP tools to register")
 
         # Provides the initial high level plan
         self.planner = ConversableAgent(
