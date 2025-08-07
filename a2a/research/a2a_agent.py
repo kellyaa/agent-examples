@@ -151,6 +151,7 @@ class ResearchExecutor(AgentExecutor):
         try:
             toolkit = None
             if settings.MCP_ENDPOINT:
+                logging.debug("Connecting to MCP server at %s", settings.MCP_ENDPOINT)
                 # Need to auth with keycloak for our PoC in order to use remote MCP
                 if settings.KEYCLOAK_URL:
                         try:
@@ -208,7 +209,7 @@ def run():
     """
     Runs the A2A Agent application.
     """
-    agent_card = get_agent_card(host="0.0.0.0", port=8000)
+    agent_card = get_agent_card(host="0.0.0.0", port=settings.SERVICE_PORT)
 
     request_handler = DefaultRequestHandler(
         agent_executor=ResearchExecutor(),
@@ -220,4 +221,4 @@ def run():
         http_handler=request_handler,
     )
 
-    uvicorn.run(server.build(), host="0.0.0.0", port=8000)
+    uvicorn.run(server.build(), host="0.0.0.0", port=settings.SERVICE_PORT)

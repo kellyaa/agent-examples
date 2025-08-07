@@ -36,12 +36,14 @@ class Agents:
         self.generic_assistant = ConversableAgent(
             name="Generic_Assistant",
             llm_config=llm_config.ollama_llm_config,
+            code_execution_config=False,
             human_input_mode="NEVER",
         )
 
         # Vision Assistant
         self.vision_assistant = ConversableAgent(
             name="Vision_Assistant",
+            code_execution_config=False,
             llm_config=llm_config.vision_llm_config,
             human_input_mode="NEVER",
         )
@@ -50,6 +52,7 @@ class Agents:
         self.assistant = ConversableAgent(
             name="Research_Assistant",
             system_message=ASSISTANT_PROMPT,
+            code_execution_config=False,
             llm_config=llm_config.ollama_llm_config,
             human_input_mode="NEVER",
             is_termination_msg=lambda msg: "tool_response" not in msg
@@ -60,6 +63,7 @@ class Agents:
         self.goal_judge = ConversableAgent(
             name="GoalJudge",
             system_message=GOAL_JUDGE_PROMPT,
+            code_execution_config=False,
             llm_config=llm_config.ollama_llm_config,
             human_input_mode="NEVER",
         )
@@ -67,6 +71,7 @@ class Agents:
         # Step Critic
         self.step_critic = ConversableAgent(
             name="Step_Critic",
+            code_execution_config=False,
             llm_config=llm_config.ollama_llm_config,
             human_input_mode="NEVER",
         )
@@ -75,6 +80,7 @@ class Agents:
         self.reflection_assistant = ConversableAgent(
             name="ReflectionAssistant",
             system_message=REFLECTION_ASSISTANT_PROMPT,
+            code_execution_config=False,
             llm_config=llm_config.ollama_llm_config,
             human_input_mode="NEVER",
         )
@@ -83,18 +89,15 @@ class Agents:
         self.report_generator = ConversableAgent(
             name="Report_Generator",
             llm_config=llm_config.ollama_llm_config,
+            code_execution_config=False,
             human_input_mode="NEVER",
         )
 
         # User Proxy chats with assistant on behalf of user and executes tools
-        code_exec = coding.LocalCommandLineCodeExecutor(
-            timeout=10,
-            work_dir="code_exec",
-        )
         self.user_proxy = ConversableAgent(
             name="User",
             human_input_mode="NEVER",
-            code_execution_config={"executor": code_exec},
+            code_execution_config=False,
             is_termination_msg=lambda msg: msg
             and "content" in msg
             and msg["content"] is not None
@@ -125,9 +128,11 @@ class Agents:
             logging.info(mcp_toolkit)
             mcp_toolkit.register_for_execution(self.user_proxy)
             mcp_toolkit.register_for_llm(self.assistant)
-            tool_descriptions = ""
+            tool_descriptions = []
             for tool in mcp_toolkit.tools:
-                tool_descriptions += str(tool.description)
+                tool_descriptions.append({tool.name : tool.description})
+            tool_descriptions = str(tool_descriptions)
+            logging.info("Tool descriptions: %s", tool_descriptions)
         else:
             logging.info("No MCP tools to register")
 
