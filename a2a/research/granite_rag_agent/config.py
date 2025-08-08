@@ -49,7 +49,7 @@ class Settings(BaseSettings):
             description="The transport method of your MCP server. sse or streamable_http")
     KEYCLOAK_URL: str = Field(os.getenv("KEYCLOAK_URL", "http://keycloak.localtest.me:8080"),
                               descripiton="URL of keycloak server")
-    SERVICE_PORT: int = Field(os.getenv("SERVICE_URL", 80800), description="Port on which the service will run.")
+    SERVICE_PORT: int = Field(os.getenv("SERVICE_URL", 8000), description="Port on which the service will run.")
 
     class Config:
         env_file = ".env"
