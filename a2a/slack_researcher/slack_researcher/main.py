@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 from typing import Callable, List, Any
 
 from autogen.mcp.mcp_client import Toolkit
-from granite_rag_agent.event import Event
-from granite_rag_agent.agents import Agents
-from granite_rag_agent.config import Settings
-from granite_rag_agent.prompts import STEP_CRITIC_PROMPT
+from slack_researcher.event import Event
+from slack_researcher.agents import Agents
+from slack_researcher.config import Settings
+from slack_researcher.prompts import STEP_CRITIC_PROMPT
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(levelname)s: %(message)s')
@@ -50,13 +50,7 @@ class RagAgent:
 
     async def run_workflow(self, body: list[dict]):
         # Parse instructions from user
-        self.context.latest_content, image_info = self._extract_user_input(body)
-        self.context.image_descriptions = await self._describe_images(
-            self.context.latest_content, image_info
-        )
-        plan_instruction = self._combine_input_and_descriptions(
-            self.context.latest_content, self.context.image_descriptions
-        )
+        plan_instruction = self._extract_user_input(body)
 
         # Create an initial plan with the instructions
         self.context.plan_dict = await self._generate_plan(plan_instruction)
@@ -72,45 +66,17 @@ class RagAgent:
     def _extract_user_input(self, body):
         content = body[-1]["content"]
         latest_content = ""
-        image_info = []
 
         if isinstance(content, str):
             latest_content = content
         else:
             for item in content:
-                if item["type"] == "image_url":
-                    image_info.append(item)
-                elif item["type"] == "text":
+                if item["type"] == "text":
                     latest_content += item["text"]
                 else:
                     self.logger.warning(f"Ignoring content with type {item['type']}")
 
-        return latest_content, image_info
-
-    async def _describe_images(self, latest_content, image_info):
-        async def describe(image):
-            await self.eventer.emit_event(message="Analyzing Image...")
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"Please describe the following image... {latest_content}",
-                        },
-                        image,
-                    ],
-                }
-            ]
-            desc = await self.agents.vision_assistant.a_generate_reply(
-                messages=messages
-            )
-            return f"Accompanying image description: {desc['content']}"
-
-        return await asyncio.gather(*(describe(img) for img in image_info))
-
-    def _combine_input_and_descriptions(self, text, descriptions):
-        return text + "\n\n" + "\n".join(descriptions)
+        return latest_content
 
     async def _generate_plan(self, instruction):
         await self.eventer.emit_event(message="Creating a plan...")

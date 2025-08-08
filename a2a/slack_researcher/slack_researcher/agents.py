@@ -5,9 +5,9 @@ from typing import Callable
 from autogen import coding, ConversableAgent, register_function
 from autogen.mcp.mcp_client import Toolkit
 
-from granite_rag_agent.config import Settings
-from granite_rag_agent.llm import LLMConfig
-from granite_rag_agent.prompts import (
+from slack_researcher.config import Settings
+from slack_researcher.llm import LLMConfig
+from slack_researcher.prompts import (
     ASSISTANT_PROMPT,
     GOAL_JUDGE_PROMPT,
     PLANNER_MESSAGE,
@@ -35,16 +35,8 @@ class Agents:
         # Generic LLM completion, used for servicing Open WebUI originated requests
         self.generic_assistant = ConversableAgent(
             name="Generic_Assistant",
-            llm_config=llm_config.ollama_llm_config,
+            llm_config=llm_config.openai_llm_config,
             code_execution_config=False,
-            human_input_mode="NEVER",
-        )
-
-        # Vision Assistant
-        self.vision_assistant = ConversableAgent(
-            name="Vision_Assistant",
-            code_execution_config=False,
-            llm_config=llm_config.vision_llm_config,
             human_input_mode="NEVER",
         )
 
@@ -53,7 +45,7 @@ class Agents:
             name="Research_Assistant",
             system_message=ASSISTANT_PROMPT,
             code_execution_config=False,
-            llm_config=llm_config.ollama_llm_config,
+            llm_config=llm_config.openai_llm_config,
             human_input_mode="NEVER",
             is_termination_msg=lambda msg: "tool_response" not in msg
             and msg["content"] == "",
@@ -64,7 +56,7 @@ class Agents:
             name="GoalJudge",
             system_message=GOAL_JUDGE_PROMPT,
             code_execution_config=False,
-            llm_config=llm_config.ollama_llm_config,
+            llm_config=llm_config.openai_llm_config,
             human_input_mode="NEVER",
         )
 
@@ -72,7 +64,7 @@ class Agents:
         self.step_critic = ConversableAgent(
             name="Step_Critic",
             code_execution_config=False,
-            llm_config=llm_config.ollama_llm_config,
+            llm_config=llm_config.openai_llm_config,
             human_input_mode="NEVER",
         )
 
@@ -81,14 +73,14 @@ class Agents:
             name="ReflectionAssistant",
             system_message=REFLECTION_ASSISTANT_PROMPT,
             code_execution_config=False,
-            llm_config=llm_config.ollama_llm_config,
+            llm_config=llm_config.openai_llm_config,
             human_input_mode="NEVER",
         )
 
         # Report Generator
         self.report_generator = ConversableAgent(
             name="Report_Generator",
-            llm_config=llm_config.ollama_llm_config,
+            llm_config=llm_config.openai_llm_config,
             code_execution_config=False,
             human_input_mode="NEVER",
         )

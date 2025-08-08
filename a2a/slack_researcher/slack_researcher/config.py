@@ -16,19 +16,11 @@ class Settings(BaseSettings):
         os.getenv("TASK_MODEL_ID", "granite3.3:8b"),
         description="The ID of the task model",
     )
-    VISION_MODEL_ID: str = Field(
-        os.getenv("VISION_MODEL_ID", "granite3.2-vision:2b"),
-        description="The ID of the vision model",
-    )
     OPENAI_API_URL: str = Field(
         os.getenv("OPENAI_API_URL", "http://localhost:11434/v1"),
         description="The URL for OpenAI API",
     )
     OPENAI_API_KEY: str = Field(os.getenv("OPENAI_API_KEY", "ollama"), description="The key for OpenAI API")
-    VISION_API_URL: str = Field(
-        os.getenv("VISION_API_URL", "http://localhost:11434/v1"),
-        description="The URL for Vision API",
-    )
     EXTRA_HEADERS: dict = Field({}, description="Extra headers for the OpenAI API")
     MODEL_TEMPERATURE: float = Field(
         os.getenv("MODEL_TEMPERATURE", 0),

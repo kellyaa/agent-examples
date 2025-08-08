@@ -17,41 +17,77 @@ from a2a.server.apps import A2AStarletteApplication
 from a2a.server.events.event_queue import EventQueue
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TaskState
+from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TaskState, SecurityScheme, HTTPAuthSecurityScheme
 from a2a.utils import new_agent_text_message, new_task
 
-from granite_rag_agent.config import settings, Settings
-from granite_rag_agent.event import Event
-from granite_rag_agent.keycloak import get_token
-from granite_rag_agent.main import RagAgent
-from granite_rag_agent.tools.tavily_search import search
+from starlette.authentication import AuthCredentials, SimpleUser, UnauthenticatedUser, AuthenticationBackend, AuthenticationError
+from starlette.middleware import Middleware
+from starlette.middleware.authentication import AuthenticationMiddleware
+from starlette.applications import Starlette
+from starlette.routing import Route
+from starlette.responses import PlainTextResponse
+
+from slack_researcher.auth import get_auth, get_token_verifier
+from slack_researcher.config import settings, Settings
+from slack_researcher.event import Event
+from slack_researcher.auth import get_keyclock_token
+from slack_researcher.main import RagAgent
+from slack_researcher.tools.tavily_search import search
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(levelname)s: %(message)s')
 
+class BearerAuthBackend(AuthenticationBackend):
+    """ Very temporary demo to grab auth token and print it"""
+    async def authenticate(self, conn):
+        try:
+            auth = conn.headers.get("authorization")
+            if not auth or not auth.lower().startswith("bearer "):
+                print("No bearer token provided")
+                return
+            token = auth.split(" ", 1)[1]
+            print(f"TOKEN: {token}")
+
+            # Storing the token as the username - not a real life scenario - just demo-ing the passing of creds
+            user = SimpleUser(token)
+            return AuthCredentials(["authenticated"]), user
+        except Exception as e:
+            logger.error("Exception when attempting to obtain user token")
+            logger.error(e)
+    
 
 def get_agent_card(host: str, port: int):
     """Returns the Agent Card for the AG2 Agent."""
     capabilities = AgentCapabilities(streaming=True)
     skill = AgentSkill(
-        id="web_researcher",
-        name="Web research agent",
-        description="Perform research using web searches",
-        tags=["research", "internet", "search", "report"],
+        id="slack_researcher",
+        name="Slack research agent",
+        description="Answer queries by searching thorugh a given slack server",
+        tags=["research", "slack", "search", "report"],
         examples=[
-            "Find me the latest news on AI agents",
-            "Write a report about the latest academic papers on bubble gum",
+            "Find tme the most popular channels for discussing AI agents",
+            "Summarize what's been happening in the general channel latley",
         ],
     )
     return AgentCard(
         name="Web Research Agent",
-        description="Perform research using web searches",
+        description="Answer queries by searching thorugh a given slack server",
         url=f"http://{host}:{port}/",
         version="1.0.0",
         default_input_modes=["text"],
         default_output_modes=["text"],
         capabilities=capabilities,
         skills=[skill],
+        securitySchemes={
+            "Bearer": SecurityScheme(
+                root=HTTPAuthSecurityScheme(
+                    type="http",
+                    scheme="bearer",
+                    bearerFormat="JWT",
+                    description="OAuth 2.0 JWT token"
+                )
+            )
+        },
     )
 
 
@@ -130,6 +166,7 @@ class ResearchExecutor(AgentExecutor):
         Returns:
             None
         """
+        user_token = context.call_context.user.user_name
         user_input = [context.get_user_input()]
         task = context.current_task
         if not task:
@@ -146,48 +183,35 @@ class ResearchExecutor(AgentExecutor):
                 }
             )
 
-        search_tool = search
-        assistant_tool_map = {"web_search": search_tool}
+        # no internal tools right now, will add later
+        assistant_tool_map = {}
+
+        # Hook up MCP tools
+        toolkit = None
         try:
-            toolkit = None
             if settings.MCP_ENDPOINT:
                 logging.debug("Connecting to MCP server at %s", settings.MCP_ENDPOINT)
-                # Need to auth with keycloak for our PoC in order to use remote MCP
-                if settings.KEYCLOAK_URL:
-                        try:
-                            token = get_token()
-                            logger.info(f'received token: {token}')
-                        except Exception as e:
-                            logger.error("Unable to retrieve keycloak token: %s", e)
 
-                if settings.MCP_TRANSPORT == "sse":
-                    async with sse_client(
-                        url=settings.MCP_ENDPOINT
-                    ) as streams, ClientSession(*streams) as session:
-                        await session.initialize()
-                        toolkit = await create_toolkit(
-                            session=session, use_mcp_resources=False
-                        )
-                        await self._run_agent(messages, settings,
-                            event_emitter,
-                            assistant_tool_map,
-                            toolkit,)
-                else:
-                    async with streamablehttp_client(
-                        url=settings.MCP_ENDPOINT
-                    )  as (
-                        read_stream,
-                        write_stream,
-                        _,
-                    ), ClientSession(read_stream, write_stream) as session:
-                        await session.initialize()
-                        toolkit = await create_toolkit(
-                            session=session, use_mcp_resources=False
-                        )
-                        await self._run_agent(messages, settings,
-                            event_emitter,
-                            assistant_tool_map,
-                            toolkit,)
+                headers={}
+                if user_token:
+                    headers={"Authorization": f"Bearer {user_token}"}
+
+                async with streamablehttp_client(
+                    url=settings.MCP_ENDPOINT,
+                    headers=headers
+                )  as (
+                    read_stream,
+                    write_stream,
+                    _,
+                ), ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    toolkit = await create_toolkit(
+                        session=session, use_mcp_resources=False
+                    )
+                    await self._run_agent(messages, settings,
+                        event_emitter,
+                        assistant_tool_map,
+                        toolkit,)
             else:
                 await self._run_agent(messages, settings,
                     event_emitter,
@@ -221,4 +245,7 @@ def run():
         http_handler=request_handler,
     )
 
-    uvicorn.run(server.build(), host="0.0.0.0", port=settings.SERVICE_PORT)
+    app = server.build()  # this returns a Starlette app
+    app.add_middleware(AuthenticationMiddleware, backend=BearerAuthBackend())
+
+    uvicorn.run(app, host="0.0.0.0", port=settings.SERVICE_PORT)
