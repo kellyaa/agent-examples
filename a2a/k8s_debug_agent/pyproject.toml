@@ -1,0 +1,25 @@
+[project]
+name = "k8s-debug-agent"
+version = "0.1.0"
+requires-python = ">=3.11,<3.13"
+description = "Kubernetes debug agent that diagnoses application failures by inspecting cluster state and correlating with GitHub code changes"
+dependencies = [
+    "ag2[openai,mcp,tracing]>=0.11.2",
+    "python-dotenv>=1.1.0",
+    "a2a-sdk[http-server]>=0.3.22",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.7.1",
+    "uvicorn>=0.34.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[project.scripts]
+server = "a2a_agent:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
