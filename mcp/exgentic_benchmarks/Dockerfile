@@ -33,8 +33,10 @@ RUN git clone https://github.com/Exgentic/exgentic.git /app/exgentic
 WORKDIR /app/exgentic
 RUN git checkout feature/mcp-command
 
-# Set UV_SYSTEM_PYTHON before any uv operations to ensure uv uses system Python
-ENV UV_SYSTEM_PYTHON=1
+# Set HOME and UV_SYSTEM_PYTHON before any uv/install operations so that
+# cached dataset paths (HuggingFace Arrow files) match the runtime HOME.
+ENV HOME=/app \
+    UV_SYSTEM_PYTHON=1
 
 # Install Exgentic and its dependencies using uv
 RUN uv pip install --system --no-cache -e .
@@ -56,14 +58,11 @@ ENV BENCHMARK_NAME=${BENCHMARK_NAME} \
     RELEASE_VERSION=${RELEASE_VERSION}
 
 # Create non-root user and set permissions
-RUN useradd -m -u 1001 exgentic && \
-    chown -R 1001:0 /app && \
+RUN useradd -m -u 1000 exgentic && \
+    chown -R 1000:0 /app && \
     chmod -R g+rwX /app
     
-USER 1001
-
-# Set HOME environment variable to /app
-ENV HOME=/app
+USER 1000
 
 
 # Expose the default port
