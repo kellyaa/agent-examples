@@ -1,0 +1,39 @@
+[project]
+name = "simple-skill-demo"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+description = "Multi-stage skill-driven agent using AG2 beta tools, exposed via A2A"
+dependencies = [
+    "python-dotenv>=1.1.0",
+    "a2a-sdk[http-server]>=0.3.22",
+    "ag2[a2a,openai]>=0.12.0",
+    "asyncpg>=0.30.0",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.7.1",
+    "uvicorn>=0.34.0",
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
+]
+
+[project.optional-dependencies]
+otel = [
+    "openinference-semantic-conventions>=0.1.12",
+    "opentelemetry-instrumentation-httpx>=0.49b0",
+    "opentelemetry-instrumentation-openai>=0.40.0",
+]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[project.scripts]
+server = "simple_skill_demo.main:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
