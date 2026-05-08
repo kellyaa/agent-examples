@@ -156,8 +156,7 @@ class OrchestrationRunner:
                 if last_step:
                     last_exec = await self._store.get_latest_execution(context_id, last_step.id)
                     final_output = (
-                        last_exec.summary if last_exec and last_exec.summary
-                        else "Goal completed successfully."
+                        last_exec.summary if last_exec and last_exec.summary else "Goal completed successfully."
                     )
                 else:
                     # Zero-step completion — planner decided the prior context answers
@@ -204,9 +203,7 @@ class OrchestrationRunner:
 
     # ── goal resolution ──
 
-    async def _resolve_or_create_goal(
-        self, context_id: str, turn_id: str, user_text: str, emit: EventCallback
-    ) -> Goal:
+    async def _resolve_or_create_goal(self, context_id: str, turn_id: str, user_text: str, emit: EventCallback) -> Goal:
         current = await self._store.get_current_goal(context_id)
 
         if current is None or current.status != GoalStatus.ACTIVE:
@@ -216,8 +213,7 @@ class OrchestrationRunner:
                 await emit(f"Starting goal #{goal.goal_index}.")
             else:
                 await emit(
-                    f"Previous goal #{current.goal_index} was {current.status.value}. "
-                    f"Starting goal #{goal.goal_index}."
+                    f"Previous goal #{current.goal_index} was {current.status.value}. Starting goal #{goal.goal_index}."
                 )
             return goal
 
@@ -226,9 +222,7 @@ class OrchestrationRunner:
         if superseded_ids:
             logger.info("Superseded active goals: %s", superseded_ids)
         goal = await self._store.create_goal(context_id, user_text, originating_turn_id=turn_id)
-        await emit(
-            f"Superseded goal #{current.goal_index}. Starting goal #{goal.goal_index}."
-        )
+        await emit(f"Superseded goal #{current.goal_index}. Starting goal #{goal.goal_index}.")
         return goal
 
     # ── step lifecycle ──
@@ -273,9 +267,7 @@ class OrchestrationRunner:
         )
         return review_result
 
-    async def _handle_failure(
-        self, step: PlanStep, review_result: ReviewResult, goal: Goal
-    ) -> None:
+    async def _handle_failure(self, step: PlanStep, review_result: ReviewResult, goal: Goal) -> None:
         new_retry = step.retry_count + 1
         await self._store.update_step(step.id, retry_count=new_retry)
         await self._store.update_goal(goal.id, failure_count=goal.failure_count + 1)
@@ -330,9 +322,7 @@ class OrchestrationRunner:
         resolved = step.model_copy(update={"inputs": resolved_inputs})
         return resolved, missing
 
-    async def _maybe_create_artifact(
-        self, step: PlanStep, exec_result: ExecutionResult, goal: Goal
-    ) -> None:
+    async def _maybe_create_artifact(self, step: PlanStep, exec_result: ExecutionResult, goal: Goal) -> None:
         if not step.expected_artifact_name:
             return
         if exec_result.error:

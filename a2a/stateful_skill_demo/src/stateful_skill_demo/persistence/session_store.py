@@ -48,9 +48,7 @@ class SessionStore:
             context_id,
             now,
         )
-        row = await executor.fetchrow(
-            "SELECT * FROM sessions WHERE context_id = $1", context_id
-        )
+        row = await executor.fetchrow("SELECT * FROM sessions WHERE context_id = $1", context_id)
         return Session(
             context_id=row["context_id"],
             current_goal_id=row["current_goal_id"],
@@ -69,22 +67,16 @@ class SessionStore:
             updated_at=row["updated_at"],
         )
 
-    async def _update_session(
-        self, context_id: str, *, conn: asyncpg.Connection | None = None, **fields
-    ) -> None:
+    async def _update_session(self, context_id: str, *, conn: asyncpg.Connection | None = None, **fields) -> None:
         fields["updated_at"] = datetime.now(timezone.utc)
         sets = ", ".join(f"{k} = ${i + 2}" for i, k in enumerate(fields))
         values = [context_id, *fields.values()]
         executor = self._exec(conn)
-        await executor.execute(
-            f"UPDATE sessions SET {sets} WHERE context_id = $1", *values
-        )
+        await executor.execute(f"UPDATE sessions SET {sets} WHERE context_id = $1", *values)
 
     # ── user_turns ──
 
-    async def create_turn(
-        self, context_id: str, text: str, *, conn: asyncpg.Connection | None = None
-    ) -> UserTurn:
+    async def create_turn(self, context_id: str, text: str, *, conn: asyncpg.Connection | None = None) -> UserTurn:
         """Insert a new user turn with auto-incrementing turn_index. goal_id is NULL until bound."""
         turn_id = f"turn_{uuid.uuid4().hex[:8]}"
         now = datetime.now(timezone.utc)
@@ -111,12 +103,8 @@ class SessionStore:
             received_at=row["received_at"],
         )
 
-    async def bind_turn_to_goal(
-        self, turn_id: str, goal_id: str, *, conn: asyncpg.Connection | None = None
-    ) -> None:
-        await self._exec(conn).execute(
-            "UPDATE user_turns SET goal_id = $2 WHERE id = $1", turn_id, goal_id
-        )
+    async def bind_turn_to_goal(self, turn_id: str, goal_id: str, *, conn: asyncpg.Connection | None = None) -> None:
+        await self._exec(conn).execute("UPDATE user_turns SET goal_id = $2 WHERE id = $1", turn_id, goal_id)
 
     async def get_turns_for_context(self, context_id: str) -> list[UserTurn]:
         rows = await self._db.pool.fetch(
@@ -205,9 +193,7 @@ class SessionStore:
         return self._row_to_goal(r)
 
     async def get_goals_for_context(self, context_id: str) -> list[Goal]:
-        rows = await self._db.pool.fetch(
-            "SELECT * FROM goals WHERE context_id = $1 ORDER BY goal_index", context_id
-        )
+        rows = await self._db.pool.fetch("SELECT * FROM goals WHERE context_id = $1 ORDER BY goal_index", context_id)
         return [self._row_to_goal(r) for r in rows]
 
     async def get_current_goal(self, context_id: str) -> Goal | None:
@@ -221,17 +207,13 @@ class SessionStore:
             return None
         return self._row_to_goal(r)
 
-    async def update_goal(
-        self, goal_id: str, *, conn: asyncpg.Connection | None = None, **fields
-    ) -> None:
+    async def update_goal(self, goal_id: str, *, conn: asyncpg.Connection | None = None, **fields) -> None:
         fields["updated_at"] = datetime.now(timezone.utc)
         if "status" in fields and isinstance(fields["status"], GoalStatus):
             fields["status"] = fields["status"].value
         sets = ", ".join(f"{k} = ${i + 2}" for i, k in enumerate(fields))
         values = [goal_id, *fields.values()]
-        await self._exec(conn).execute(
-            f"UPDATE goals SET {sets} WHERE id = $1", *values
-        )
+        await self._exec(conn).execute(f"UPDATE goals SET {sets} WHERE id = $1", *values)
 
     async def supersede_active_goals(
         self,
@@ -298,9 +280,7 @@ class SessionStore:
         )
 
     async def get_steps_for_goal(self, goal_id: str) -> list[PlanStep]:
-        rows = await self._db.pool.fetch(
-            "SELECT * FROM plan_steps WHERE goal_id = $1 ORDER BY step_order", goal_id
-        )
+        rows = await self._db.pool.fetch("SELECT * FROM plan_steps WHERE goal_id = $1 ORDER BY step_order", goal_id)
         return [self._row_to_step(r) for r in rows]
 
     async def get_step(self, step_id: str) -> PlanStep | None:
@@ -326,23 +306,17 @@ class SessionStore:
             updated_at=r["updated_at"],
         )
 
-    async def update_step(
-        self, step_id: str, *, conn: asyncpg.Connection | None = None, **fields
-    ) -> None:
+    async def update_step(self, step_id: str, *, conn: asyncpg.Connection | None = None, **fields) -> None:
         fields["updated_at"] = datetime.now(timezone.utc)
         if "status" in fields and isinstance(fields["status"], StepStatus):
             fields["status"] = fields["status"].value
         sets = ", ".join(f"{k} = ${i + 2}" for i, k in enumerate(fields))
         values = [step_id, *fields.values()]
-        await self._exec(conn).execute(
-            f"UPDATE plan_steps SET {sets} WHERE id = $1", *values
-        )
+        await self._exec(conn).execute(f"UPDATE plan_steps SET {sets} WHERE id = $1", *values)
 
     # ── execution_logs ──
 
-    async def log_execution(
-        self, result: ExecutionResult, *, conn: asyncpg.Connection | None = None
-    ) -> None:
+    async def log_execution(self, result: ExecutionResult, *, conn: asyncpg.Connection | None = None) -> None:
         await self._exec(conn).execute(
             """INSERT INTO execution_logs (id, context_id, goal_id, step_id, artifact_id,
                skill_name, skill_inputs_json, raw_output, summary, error_json, runtime_ms, created_at)
@@ -405,9 +379,7 @@ class SessionStore:
 
     # ── review_logs ──
 
-    async def log_review(
-        self, review: ReviewResult, *, conn: asyncpg.Connection | None = None
-    ) -> None:
+    async def log_review(self, review: ReviewResult, *, conn: asyncpg.Connection | None = None) -> None:
         await self._exec(conn).execute(
             """INSERT INTO review_logs (id, context_id, goal_id, step_id, review_status,
                goal_achieved, reason, recommended_action, created_at)
@@ -462,9 +434,7 @@ class SessionStore:
 
     # ── artifacts ──
 
-    async def create_artifact(
-        self, artifact: Artifact, *, conn: asyncpg.Connection | None = None
-    ) -> Artifact:
+    async def create_artifact(self, artifact: Artifact, *, conn: asyncpg.Connection | None = None) -> Artifact:
         """Create an artifact. If one with (context_id, name) exists and is not superseded,
         mark it superseded and bump the new artifact's version."""
 
@@ -521,9 +491,7 @@ class SessionStore:
             return None
         return self._row_to_artifact(r)
 
-    async def get_artifacts_for_context(
-        self, context_id: str, include_superseded: bool = False
-    ) -> list[Artifact]:
+    async def get_artifacts_for_context(self, context_id: str, include_superseded: bool = False) -> list[Artifact]:
         if include_superseded:
             rows = await self._db.pool.fetch(
                 "SELECT * FROM artifacts WHERE context_id = $1 ORDER BY created_at",
@@ -538,12 +506,8 @@ class SessionStore:
             )
         return [self._row_to_artifact(r) for r in rows]
 
-    async def mark_artifact_stale(
-        self, artifact_id: str, *, conn: asyncpg.Connection | None = None
-    ) -> None:
-        await self._exec(conn).execute(
-            "UPDATE artifacts SET is_stale = true WHERE id = $1", artifact_id
-        )
+    async def mark_artifact_stale(self, artifact_id: str, *, conn: asyncpg.Connection | None = None) -> None:
+        await self._exec(conn).execute("UPDATE artifacts SET is_stale = true WHERE id = $1", artifact_id)
 
     @staticmethod
     def _row_to_artifact(r) -> Artifact:
@@ -564,9 +528,7 @@ class SessionStore:
 
     # ── resume ──
 
-    async def get_resume_point_for_current_goal(
-        self, context_id: str
-    ) -> tuple[ResumePoint, Goal | None]:
+    async def get_resume_point_for_current_goal(self, context_id: str) -> tuple[ResumePoint, Goal | None]:
         """Resolve resume-point scoped to the current goal on the session.
 
         - No session / no current goal → AWAIT_NEW_GOAL (server should create one).

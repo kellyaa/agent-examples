@@ -13,6 +13,7 @@ _paths = [
     str(root / "a2a" / "a2a_currency_converter"),
     str(root / "a2a" / "weather_service" / "src"),
     str(root / "a2a" / "simple_generalist" / "src"),
+    str(root / "a2a" / "stateful_skill_demo" / "src"),
     str(root / "a2a" / "a2a_contact_extractor"),
     str(root / "mcp" / "flight_tool"),
     str(root / "mcp" / "reservation_tool"),

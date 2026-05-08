@@ -70,9 +70,7 @@ async def build_planner_context(
                 err = _truncate(str(exec_result.error.get("message", exec_result.error)), 200)
             if review_result:
                 fb = _truncate(review_result.recommended_action, 300)
-            failure_lines.append(
-                f"  - {_truncate(s.description, 200)} [FAILED] error={err!r} feedback={fb!r}"
-            )
+            failure_lines.append(f"  - {_truncate(s.description, 200)} [FAILED] error={err!r} feedback={fb!r}")
 
         goal_blocks.append((g, succeeded_lines, failure_lines))
 
@@ -96,9 +94,7 @@ async def build_planner_context(
             lines = ["Available artifacts (reference via @{name} in step inputs):"]
             for a in artifacts:
                 stale = " [STALE]" if a.is_stale else ""
-                lines.append(
-                    f"- {a.name} ({a.kind.value}, v{a.version}){stale}: {_truncate(a.summary, 200)}"
-                )
+                lines.append(f"- {a.name} ({a.kind.value}, v{a.version}){stale}: {_truncate(a.summary, 200)}")
             artifacts_block = "\n".join(lines)
         else:
             artifacts_block = ""

@@ -138,9 +138,7 @@ class SkillDemoExecutor(AgentExecutor):
             executor = ExecutorAgent(self._settings)
             reviewer = ReviewerAgent(self._settings)
             responder = ResponderAgent(self._settings)
-            runner = OrchestrationRunner(
-                self._settings, store, planner, executor, reviewer, responder
-            )
+            runner = OrchestrationRunner(self._settings, store, planner, executor, reviewer, responder)
 
             async with self._lock_for(context_id):
                 await store.ensure_session(context_id)

@@ -66,10 +66,7 @@ def setup_observability() -> None:
     _use_otel = use_otel
 
     if not use_otel:
-        logger.warning(
-            "No tracing backend configured. "
-            "Set OTEL_EXPORTER_OTLP_ENDPOINT for OpenTelemetry tracing."
-        )
+        logger.warning("No tracing backend configured. Set OTEL_EXPORTER_OTLP_ENDPOINT for OpenTelemetry tracing.")
         return
 
     service_name = os.getenv("OTEL_SERVICE_NAME", "skill-demo-service")

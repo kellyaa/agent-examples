@@ -146,9 +146,7 @@ class Database:
 
         conn = await asyncpg.connect(maintenance_dsn)
         try:
-            exists = await conn.fetchval(
-                "SELECT 1 FROM pg_database WHERE datname = $1", db_name
-            )
+            exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", db_name)
             if not exists:
                 await conn.execute(f'CREATE DATABASE "{db_name}"')
                 logger.info("Created database '%s'", db_name)
@@ -160,9 +158,7 @@ class Database:
             await self._ensure_database_exists()
         self._pool = await asyncpg.create_pool(self._dsn, min_size=2, max_size=10)
         async with self._pool.acquire() as conn:
-            exists = await conn.fetchval(
-                "SELECT to_regclass($1)", f"public.{_SCHEMA_PROBE_TABLE}"
-            )
+            exists = await conn.fetchval("SELECT to_regclass($1)", f"public.{_SCHEMA_PROBE_TABLE}")
             if exists is None:
                 await conn.execute(SCHEMA_DDL)
                 logger.info("Database schema created")
