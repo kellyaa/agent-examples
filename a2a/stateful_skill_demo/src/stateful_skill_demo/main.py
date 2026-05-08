@@ -3,9 +3,9 @@ import sys
 
 import uvicorn
 
-from simple_skill_demo.a2a_server import create_app
-from simple_skill_demo.config import Settings
-from simple_skill_demo.observability import setup_observability
+from stateful_skill_demo.a2a_server.server import create_app
+from stateful_skill_demo.config import Settings
+from stateful_skill_demo.observability import setup_observability
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ def run():
 
     setup_observability()
 
-    logger.info("Starting Multi-Stage Skill Demo Agent")
+    logger.info("Starting Stateful Skill Demo Agent")
     logger.info("LLM Model: %s", settings.llm_model)
     logger.info("LLM API Base: %s", settings.llm_api_base)
     logger.info("Database: %s", settings.database_url.split("@")[-1] if "@" in settings.database_url else "configured")

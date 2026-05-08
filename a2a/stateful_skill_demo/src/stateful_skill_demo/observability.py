@@ -1,5 +1,5 @@
 """
-Observability setup for Multi-Stage Skill Demo Agent.
+Observability setup for Stateful Skill Demo Agent.
 
 Auto-detects tracing backend from environment variables:
 - OTEL_EXPORTER_OTLP_ENDPOINT -> OpenTelemetry with GenAI semantic conventions

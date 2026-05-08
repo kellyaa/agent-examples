@@ -1,16 +1,18 @@
 import logging
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
 from pydantic import BaseModel
 
 from autogen.beta import Agent
 from autogen.beta.config import OpenAIConfig
 
-from simple_skill_demo.config.settings import Settings
-from simple_skill_demo.schemas.execution_result import ExecutionResult, ReviewResult
-from simple_skill_demo.schemas.plan_step import PlanStep
-from simple_skill_demo.schemas.session import ReviewStatus
+from stateful_skill_demo.config.settings import Settings
+from stateful_skill_demo.console_observer import ConsoleObserver
+from stateful_skill_demo.schemas.execution_result import ExecutionResult, ReviewResult
+from stateful_skill_demo.schemas.plan_step import PlanStep
+from stateful_skill_demo.schemas.session import ReviewStatus
 
 logger = logging.getLogger(__name__)
 
@@ -23,21 +25,21 @@ Rules:
 - Classify the result as SUCCESS, PARTIAL_SUCCESS, or FAILURE.
 - If FAILURE or PARTIAL_SUCCESS, explain why and recommend a concrete action.
 
-Respond ONLY with valid JSON matching this schema:
-{
-  "review_status": "SUCCESS" | "PARTIAL_SUCCESS" | "FAILURE",
-  "goal_achieved": true | false,
-  "reason": "explanation of the assessment",
-  "recommended_action": "what the planner should do next"
-}
+Output field requirements (every field MUST be present in every response):
+- review_status: one of "SUCCESS", "PARTIAL_SUCCESS", "FAILURE"
+- goal_achieved: boolean
+- reason: string; use "" when there is nothing to explain
+- recommended_action: string; use "" when no action is recommended
 """
 
 
 class ReviewerOutput(BaseModel):
-    review_status: str = "FAILURE"
-    goal_achieved: bool = False
-    reason: str = ""
-    recommended_action: str = ""
+    model_config = {"json_schema_extra": {"additionalProperties": False}}
+
+    review_status: Literal["SUCCESS", "PARTIAL_SUCCESS", "FAILURE"]
+    goal_achieved: bool
+    reason: str
+    recommended_action: str
 
 
 class ReviewerAgent:
@@ -52,6 +54,8 @@ class ReviewerAgent:
                 base_url=settings.llm_api_base,
                 temperature=settings.llm_temperature,
             ),
+            response_schema=ReviewerOutput,
+            observers=[ConsoleObserver("reviewer")] if settings.verbose_agents else (),
         )
 
     async def review(self, step: PlanStep, result: ExecutionResult) -> ReviewResult:
@@ -69,31 +73,22 @@ class ReviewerAgent:
         logger.info("Reviewer evaluating step %s", step.id)
 
         reply = await self._agent.ask(user_message)
-        raw = await reply.content() or ""
-
-        try:
-            cleaned = raw.strip()
-            if cleaned.startswith("```"):
-                cleaned = cleaned.split("\n", 1)[1].rsplit("```", 1)[0]
-            output = ReviewerOutput.model_validate_json(cleaned)
-        except Exception:
-            logger.warning("Reviewer output not valid JSON: %s", raw[:200])
+        output = await reply.content(retries=1)
+        if output is None:
             has_error = result.error is not None
             output = ReviewerOutput(
                 review_status="FAILURE" if has_error else "SUCCESS",
                 goal_achieved=not has_error,
-                reason=raw[:500],
+                reason="Reviewer returned an empty response.",
                 recommended_action="Retry the step" if has_error else "",
             )
 
-        try:
-            status = ReviewStatus(output.review_status)
-        except ValueError:
-            status = ReviewStatus.FAILURE
+        status = ReviewStatus(output.review_status)
 
         return ReviewResult(
             id=f"rev_{uuid.uuid4().hex[:8]}",
             context_id=step.context_id,
+            goal_id=step.goal_id,
             step_id=step.id,
             review_status=status,
             goal_achieved=output.goal_achieved,

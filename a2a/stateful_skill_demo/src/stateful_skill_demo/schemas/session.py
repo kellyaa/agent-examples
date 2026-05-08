@@ -4,10 +4,11 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 
-class SessionStatus(StrEnum):
+class GoalStatus(StrEnum):
     ACTIVE = "ACTIVE"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    SUPERSEDED = "SUPERSEDED"
 
 
 class StepStatus(StrEnum):
@@ -27,9 +28,6 @@ class ReviewStatus(StrEnum):
 
 class Session(BaseModel):
     context_id: str
-    user_goal: str
-    status: SessionStatus = SessionStatus.ACTIVE
-    current_step_id: str | None = None
-    failure_count: int = 0
+    current_goal_id: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

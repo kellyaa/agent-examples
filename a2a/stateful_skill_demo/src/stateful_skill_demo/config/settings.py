@@ -18,15 +18,21 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.0
 
     database_url: str = "postgresql://postgres:postgres@localhost:5432/skill_demo"
+    database_auto_create: bool = True
 
     skills_dir: str = ".skills"
 
     max_step_retries: int = 3
     max_total_failures: int = 10
 
+    planner_prior_goals_n: int | None = None
+    planner_context_char_budget: int = 8000
+
     host: str = "0.0.0.0"
     port: int = 8000
     log_level: str = "INFO"
+
+    verbose_agents: bool = False
 
     @property
     def has_valid_api_key(self) -> bool:

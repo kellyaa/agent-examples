@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stateful-skill-demo
+  namespace: team1
+  labels:
+    kagenti.io/type: agent
+    kagenti.io/protocol: a2a
+    kagenti.io/framework: AG2
+    kagenti.io/workload-type: deployment
+    app.kubernetes.io/name: stateful-skill-demo
+    app.kubernetes.io/component: agent
+  annotations:
+    kagenti.io/description: "Multi-stage skill-driven planner/executor/reviewer agent using AG2 native skills"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      kagenti.io/type: agent
+      app.kubernetes.io/name: stateful-skill-demo
+  template:
+    metadata:
+      labels:
+        kagenti.io/type: agent
+        kagenti.io/protocol: a2a
+        kagenti.io/framework: AG2
+        app.kubernetes.io/name: stateful-skill-demo
+        kagenti.io/inject: disabled
+        istio.io/dataplane-mode: none
+    spec:
+      containers:
+        - name: agent
+          image: localhost/stateful-skill-demo:latest
+          imagePullPolicy: Never
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8000"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: SKILLS_DIR
+              value: /skills
+            - name: LLM_API_BASE
+              value: "https://api.openai.com/v1"
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-secret
+                  key: apikey
+            - name: LLM_MODEL
+              value: "azure/gpt-5.4"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: skill-demo-postgres
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: skill-demo-postgres
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: skill-demo-postgres
+                  key: POSTGRES_DB
+            - name: POSTGRES_HOST
+              value: "skill-demo-postgres"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable"
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: skill
+              mountPath: /skills
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+      volumes:
+        - name: skill
+          image:
+            reference: quay.io/skillimage/tools/git-assistant:0.2.0-draft
+            pullPolicy: IfNotPresent
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stateful-skill-demo
+  namespace: team1
+  labels:
+    app.kubernetes.io/name: stateful-skill-demo
+spec:
+  selector:
+    app.kubernetes.io/name: stateful-skill-demo
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP

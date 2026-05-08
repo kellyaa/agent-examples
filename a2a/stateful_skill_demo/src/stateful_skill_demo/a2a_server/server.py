@@ -1,24 +1,27 @@
+import asyncio
 import logging
 import os
 from typing import Any
 
+from a2a.helpers.proto_helpers import new_task_from_user_message, new_text_part
 from a2a.server.agent_execution import AgentExecutor, RequestContext
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.events.event_queue import EventQueue
+from a2a.server.events import EventQueue
 from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
 from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill, Part, TaskState, TextPart
-from a2a.utils import new_agent_text_message, new_task
+from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentSkill, TaskState
+from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from simple_skill_demo.agents.executor import ExecutorAgent
-from simple_skill_demo.agents.planner import PlannerAgent
-from simple_skill_demo.agents.reviewer import ReviewerAgent
-from simple_skill_demo.config.settings import Settings
-from simple_skill_demo.observability import create_tracing_middleware, get_root_span, set_span_output
-from simple_skill_demo.orchestration.runner import OrchestrationRunner
-from simple_skill_demo.persistence.database import Database
-from simple_skill_demo.persistence.session_store import SessionStore
+from stateful_skill_demo.agents.executor import ExecutorAgent
+from stateful_skill_demo.agents.planner import PlannerAgent
+from stateful_skill_demo.agents.responder import ResponderAgent
+from stateful_skill_demo.agents.reviewer import ReviewerAgent
+from stateful_skill_demo.config.settings import Settings
+from stateful_skill_demo.observability import create_tracing_middleware, get_root_span, set_span_output
+from stateful_skill_demo.orchestration.runner import OrchestrationRunner
+from stateful_skill_demo.persistence.database import Database
+from stateful_skill_demo.persistence.session_store import SessionStore
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +30,11 @@ def get_agent_card(settings: Settings) -> AgentCard:
     capabilities = AgentCapabilities(streaming=True)
     skill = AgentSkill(
         id="skill_demo_agent",
-        name="Multi-Stage Skill Demo",
+        name="Stateful Skill Demo",
         description=(
             "A general-purpose agent that plans, executes, and reviews tasks "
-            "using AG2 native skills. Supports session persistence and resume."
+            "using AG2 native skills. Supports multi-goal conversations with "
+            "named artifacts and session resume."
         ),
         tags=["skills", "planning", "multi-stage", "a2a"],
         examples=[
@@ -45,13 +49,20 @@ def get_agent_card(settings: Settings) -> AgentCard:
     agent_url = os.getenv("AGENT_ENDPOINT", f"http://{host}:{port}").rstrip("/") + "/"
 
     return AgentCard(
-        name="Multi-Stage Skill Demo Agent",
+        name="Stateful Skill Demo Agent",
         description=(
-            "A multi-stage skill-driven agent using AG2 beta tools. "
+            "A stateful, multi-stage skill-driven agent using AG2 beta tools. "
             "Plans execution steps, runs them using skills, reviews results, "
-            "and persists all state to PostgreSQL for session resume."
+            "and persists all state to PostgreSQL. Supports multi-goal "
+            "conversations with named artifact reuse across turns."
         ),
-        url=agent_url,
+        supported_interfaces=[
+            AgentInterface(
+                url=agent_url,
+                protocol_binding="jsonrpc",
+                protocol_version="1.0",
+            )
+        ],
         version="0.1.0",
         default_input_modes=["text"],
         default_output_modes=["text"],
@@ -65,39 +76,53 @@ class SkillDemoExecutor(AgentExecutor):
         self._settings = settings
         self._db: Database | None = None
         self._store: SessionStore | None = None
+        self._context_locks: dict[str, asyncio.Lock] = {}
 
     async def _ensure_db(self) -> SessionStore:
         if self._store is None:
-            self._db = Database(self._settings.database_url)
+            self._db = Database(
+                self._settings.database_url,
+                auto_create=self._settings.database_auto_create,
+            )
             await self._db.init()
             self._store = SessionStore(self._db)
         return self._store
 
+    def _lock_for(self, context_id: str) -> asyncio.Lock:
+        lock = self._context_locks.get(context_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._context_locks[context_id] = lock
+        return lock
+
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         task = context.current_task
         if not task:
-            task = new_task(context.message)
+            task = new_task_from_user_message(context.message)
             await event_queue.enqueue_event(task)
 
         task_updater = TaskUpdater(event_queue, task.id, task.context_id)
+        emitted_final = False
 
         async def event_callback(message: str, final: bool = False) -> None:
+            nonlocal emitted_final
             logger.info("Event: %s (final=%s)", message, final)
             if final:
-                parts = [Part(root=TextPart(text=message))]
-                await task_updater.add_artifact(parts)
+                await task_updater.add_artifact([new_text_part(message)])
                 await task_updater.complete()
+                emitted_final = True
             else:
                 await task_updater.update_status(
-                    TaskState.working,
-                    new_agent_text_message(message, task_updater.context_id, task_updater.task_id),
+                    TaskState.TASK_STATE_WORKING,
+                    task_updater.new_agent_message([new_text_part(message)]),
                 )
 
         async def error_callback(message: str) -> None:
+            nonlocal emitted_final
             logger.error("Error: %s", message)
-            parts = [Part(root=TextPart(text=message))]
-            await task_updater.add_artifact(parts)
+            await task_updater.add_artifact([new_text_part(message)])
             await task_updater.failed()
+            emitted_final = True
 
         if not self._settings.has_valid_api_key:
             await error_callback("Error: No LLM API key configured. Set the LLM_API_KEY environment variable.")
@@ -112,24 +137,32 @@ class SkillDemoExecutor(AgentExecutor):
             planner = PlannerAgent(self._settings)
             executor = ExecutorAgent(self._settings)
             reviewer = ReviewerAgent(self._settings)
-            runner = OrchestrationRunner(self._settings, store, planner, executor, reviewer)
+            responder = ResponderAgent(self._settings)
+            runner = OrchestrationRunner(
+                self._settings, store, planner, executor, reviewer, responder
+            )
 
-            result = await runner.run_session(context_id, user_input, event_callback)
+            async with self._lock_for(context_id):
+                await store.ensure_session(context_id)
+                turn = await store.create_turn(context_id, user_input)
+                result = await runner.run_turn(context_id, turn.id, user_input, event_callback)
 
             root_span = get_root_span()
             if root_span and root_span.is_recording():
                 set_span_output(root_span, result)
 
-            await event_callback(result, final=True)
-
         except Exception as exc:
             logger.error("Execution error: %s", exc, exc_info=True)
             await error_callback(f"Error: {exc}")
+            return
+
+        # Fallback: runner exited without a final event. Emit a generic one so the
+        # A2A event queue closes cleanly instead of leaving the client hanging.
+        if not emitted_final:
+            logger.warning("run_turn returned without a final event; emitting fallback.")
+            await event_callback("Turn completed.", final=True)
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
-        if self._store and context.current_task:
-            context_id = context.current_task.context_id
-            await self._store.update_session(context_id, status="FAILED")
         raise NotImplementedError("Task cancellation is not fully supported")
 
 
@@ -139,14 +172,14 @@ def create_app(settings: Settings) -> Any:
     request_handler = DefaultRequestHandler(
         agent_executor=SkillDemoExecutor(settings),
         task_store=InMemoryTaskStore(),
-    )
-
-    server = A2AStarletteApplication(
         agent_card=agent_card,
-        http_handler=request_handler,
     )
 
-    app = server.build()
+    routes = [
+        *create_agent_card_routes(agent_card),
+        *create_jsonrpc_routes(request_handler, rpc_url="/", enable_v0_3_compat=True),
+    ]
+    app = Starlette(routes=routes)
     app.add_middleware(BaseHTTPMiddleware, dispatch=create_tracing_middleware())
     logger.info("A2A server application created")
     return app

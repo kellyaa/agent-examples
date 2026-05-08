@@ -5,11 +5,12 @@ from datetime import datetime, timezone
 
 from autogen.beta import Agent
 from autogen.beta.config import OpenAIConfig
-from autogen.beta.tools import FilesystemToolkit, LocalShellTool, SkillSearchToolkit, SkillsToolkit
+from autogen.beta.tools import FilesystemToolkit, LocalShellTool, SkillSearchToolkit
 
-from simple_skill_demo.config.settings import Settings
-from simple_skill_demo.schemas.execution_result import ExecutionResult
-from simple_skill_demo.schemas.plan_step import PlanStep
+from stateful_skill_demo.config.settings import Settings
+from stateful_skill_demo.console_observer import ConsoleObserver
+from stateful_skill_demo.schemas.execution_result import ExecutionResult
+from stateful_skill_demo.schemas.plan_step import PlanStep
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,11 @@ class ExecutorAgent:
                 temperature=settings.llm_temperature,
             ),
             tools=[
-                SkillsToolkit(skills_dir),
                 SkillSearchToolkit(skills_dir),
                 FilesystemToolkit(skills_dir),
                 LocalShellTool(skills_dir),
             ],
+            observers=[ConsoleObserver("executor")] if settings.verbose_agents else (),
         )
 
     async def execute(self, step: PlanStep, session_context: str = "") -> ExecutionResult:
@@ -80,6 +81,7 @@ class ExecutorAgent:
         return ExecutionResult(
             id=f"exec_{uuid.uuid4().hex[:8]}",
             context_id=step.context_id,
+            goal_id=step.goal_id,
             step_id=step.id,
             skill_name=skill_name,
             skill_inputs=step.inputs,
