@@ -39,9 +39,6 @@ ENV UV_SYSTEM_PYTHON=1
 # Install Exgentic and its dependencies using uv
 RUN uv pip install --system --no-cache -e .
 
-# Setup the agent - UV_SYSTEM_PYTHON is already set above
-RUN exgentic install --agent ${AGENT_NAME}
-
 # Copy entrypoint script
 WORKDIR /app
 COPY entrypoint.sh /app/entrypoint.sh
@@ -59,11 +56,17 @@ ENV AGENT_NAME=${AGENT_NAME} \
 RUN useradd -m -u 1001 exgentic && \
     chown -R 1001:0 /app && \
     chmod -R g+rwX /app
-    
+
 USER 1001
 
-# Set HOME environment variable to /app
+# Set HOME environment variable to /app so the venv lands where the runtime
+# looks for it (exgentic uses Path.home()/".exgentic").
 ENV HOME=/app
+
+# Pre-install the agent venv AS THE FINAL USER so it lands at /app/.exgentic and
+# is reused at runtime. Without this, the first A2A request reinstalls the venv
+# from pypi, which breaks when egress is restricted (e.g. IBAC-enabled pods).
+RUN exgentic install --agent ${AGENT_NAME}
 
 
 # Expose the default port
